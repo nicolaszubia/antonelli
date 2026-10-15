@@ -84,7 +84,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     <div class="row">
       <button class="chip" id="t-roof" aria-pressed="false">Roof: off</button>
       <button class="chip" id="t-walls" aria-pressed="false">Walls: full</button>
-      <button class="chip" id="t-labels" aria-pressed="true">Labels</button>
+      <button class="chip" id="t-drag" aria-pressed="false">Drag: pan</button>
       <button class="chip" id="t-people" aria-pressed="true">People: on</button>
       <button class="chip" id="t-move" aria-pressed="false">Move furniture: off</button>
       <button class="chip" id="t-reset">Reset layout</button>
@@ -702,7 +702,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   fixed(compressor(), 352, 205, 0);
   [[118, 437], [345, 437]].forEach(([px, py]) => { const d = new THREE.Mesh(new THREE.CircleGeometry(.17, 24), M.yellow); d.rotation.x = -Math.PI / 2; d.position.set(X(px), .012, Z(py)); scene.add(d); });
 
-  // ---- rooms: labels, jump targets, walk starts
+  // ---- rooms: jump targets and walk starts
   const ROOMS = [
     { n: 'Acceso', l: [545, 800], w: [560, 815, 0] }, { n: 'Sala de espera', l: [650, 400], w: [690, 700, 0.3] },
     { n: 'Recepción', l: [650, 575], w: [575, 570, -Math.PI / 2] }, { n: 'Hall', l: [430, 560], w: [500, 560, Math.PI / 2] },
@@ -713,27 +713,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     { n: 'Balcón', l: [520, 215], goto: false }, { n: 'Economato', l: [415, 757], goto: false, small: true },
     { n: 'RX', l: [118, 437], goto: false, small: true }, { n: 'RX', l: [345, 437], goto: false, small: true }
   ];
-  const labels = new THREE.Group(); scene.add(labels);
-  function makeLabel(text, small) {
-    const c = document.createElement('canvas'), g = c.getContext('2d'), fs = small ? 40 : 54;
-    g.font = `600 ${fs}px "Barlow Condensed", "Arial Narrow", sans-serif`;
-    const tw = Math.ceil(g.measureText(text.toUpperCase()).width), w = tw + 36, h = fs + 26;
-    c.width = w; c.height = h;
-    g.font = `600 ${fs}px "Barlow Condensed", "Arial Narrow", sans-serif`;
-    g.fillStyle = 'rgba(255,255,255,.88)'; g.beginPath(); g.roundRect ? g.roundRect(0, 0, w, h, 10) : g.rect(0, 0, w, h); g.fill();
-    g.fillStyle = '#1b2a2f'; g.textBaseline = 'middle'; g.textAlign = 'center'; g.fillText(text.toUpperCase(), w / 2, h / 2 + 2);
-    const t = new THREE.CanvasTexture(c);
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true, sizeAttenuation: false }));
-    const hh = small ? 0.022 : 0.03; s.scale.set(hh * w / h, hh, 1); s.renderOrder = 10; return s;
-  }
-  function buildLabels() {
-    labels.clear();
-    ROOMS.forEach(r => { const s = makeLabel(r.n, r.small); s.position.set(X(r.l[0]), r.small ? .5 : .9, Z(r.l[1])); labels.add(s); });
-  }
-  buildLabels(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(buildLabels);
 
   // ---- state & camera
-  const st = { mode: 'orbit', roof: false, walls: 'cut', labels: true, move: false, people: true };
+  const st = { mode: 'orbit', roof: false, walls: 'cut', drag: 'pan', move: false, people: true };
   const cam = { th: 0.5, ph: 0.95, r: 15, tx: 4, ty: 0, tz: 4.6 }, goal = Object.assign({}, cam);
   const walk = { x: X(560), z: Z(815), yaw: 0, pitch: 0 };
   const keys = {};
@@ -741,33 +723,34 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     const w = st.mode === 'walk';
     roof.visible = w || st.roof;
     wallsFull.visible = w || st.walls === 'full'; wallsCut.visible = !w && st.walls === 'cut';
-    labels.visible = !w && st.labels;
     document.getElementById('t-roof').textContent = 'Roof: ' + (st.roof ? 'on' : 'off');
     document.getElementById('t-roof').setAttribute('aria-pressed', st.roof);
     document.getElementById('t-walls').textContent = 'Walls: ' + (st.walls === 'full' ? 'full' : st.walls === 'cut' ? 'cut-away' : 'hidden');
     document.getElementById('t-walls').setAttribute('aria-pressed', st.walls !== 'full');
-    document.getElementById('t-labels').setAttribute('aria-pressed', st.labels);
+    document.getElementById('t-drag').textContent = 'Drag: ' + (st.drag === 'pan' ? 'pan' : 'rotate');
+    document.getElementById('t-drag').setAttribute('aria-pressed', st.drag === 'orbit');
     peopleList.forEach(p => p.visible = st.people);
     document.getElementById('t-people').textContent = 'People: ' + (st.people ? 'on' : 'off');
     document.getElementById('t-people').setAttribute('aria-pressed', st.people);
     document.getElementById('t-move').textContent = 'Move furniture: ' + (st.move ? 'on' : 'off');
     document.getElementById('t-move').setAttribute('aria-pressed', st.move);
     document.getElementById('t-move').disabled = w; document.getElementById('t-reset').disabled = w;
-    ['t-roof', 't-walls', 't-labels'].forEach(id => document.getElementById(id).disabled = w);
+    ['t-roof', 't-walls', 't-drag'].forEach(id => document.getElementById(id).disabled = w);
     document.getElementById('pad').hidden = !w;
   }
-  const hints = {
-    orbit: 'Drag the floor to orbit · right-drag or two fingers to pan · scroll or pinch to zoom · turn on Move furniture to drag pieces',
-    top: 'Plan view · turn on Move furniture to drag pieces · right-drag or two fingers to pan · scroll or pinch to zoom',
-    walk: 'Drag to look around (the view follows your hand) · W A S D or arrow keys to walk · Shift to run · pick a room below to jump there'
+  const hintFor = m => {
+    if (m === 'walk') return 'Drag to look around (the view follows your hand) · W A S D or arrow keys to walk · Shift to run · pick a room below to jump there';
+    const main = st.drag === 'pan' ? 'Drag to move the model · right-drag or Shift-drag to rotate' : 'Drag to rotate · right-drag or Shift-drag to move the model';
+    return main + ' · scroll or pinch to zoom · turn on Move furniture to drag pieces';
   };
+  function setHint() { document.getElementById('hint').textContent = hintFor(st.mode); }
   function fitR() { return 14 * Math.max(1, 1.2 / camera.aspect); }
   function setMode(m) {
     st.mode = m; deselect();
     ['orbit', 'top', 'walk'].forEach(k => document.getElementById('m-' + k).setAttribute('aria-pressed', k === m));
     if (m === 'top') { goal.ph = 0.02; goal.th = 0; goal.r = fitR(); goal.tx = 4; goal.tz = 4.6; if (st.roof) { st.roof = false; } }
     if (m === 'orbit' && goal.ph < 0.3) goal.ph = 0.95;
-    document.getElementById('hint').textContent = hints[m]; applyVis();
+    setHint(); applyVis();
   }
   function jump(r) {
     if (st.mode === 'walk') { walk.x = X(r.w[0]); walk.z = Z(r.w[1]); walk.yaw = r.w[2]; walk.pitch = 0; }
@@ -782,7 +765,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   document.getElementById('m-walk').onclick = () => { setMode('walk'); jump(ROOMS[0]); };
   document.getElementById('t-roof').onclick = () => { st.roof = !st.roof; applyVis(); };
   document.getElementById('t-walls').onclick = () => { st.walls = st.walls === 'full' ? 'cut' : st.walls === 'cut' ? 'off' : 'full'; applyVis(); };
-  document.getElementById('t-labels').onclick = () => { st.labels = !st.labels; applyVis(); };
+  document.getElementById('t-drag').onclick = () => { st.drag = st.drag === 'pan' ? 'orbit' : 'pan'; applyVis(); setHint(); };
   document.getElementById('t-people').onclick = () => { st.people = !st.people; applyVis(); };
   document.getElementById('t-move').onclick = () => { st.move = !st.move; if (!st.move) deselect(); applyVis(); };
   document.getElementById('t-reset').onclick = () => { items.forEach(g => { g.position.set(g.userData.home.x, 0, g.userData.home.z); g.rotation.y = g.userData.home.r; }); deselect(); };
@@ -819,7 +802,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     const hit = e.button === 0 && st.move ? pickItem(e) : null;
     if (hit && !e.shiftKey) {
       select(hit); gesture = 'item'; const p = new THREE.Vector3(); ray.ray.intersectPlane(plane, p); dragOff.copy(hit.position).sub(p); canvas.style.cursor = 'grabbing';
-    } else gesture = (e.button === 2 || e.shiftKey) ? 'pan' : 'orbit';
+    } else { const alt = st.drag === 'pan' ? 'orbit' : 'pan'; gesture = (e.button === 2 || e.shiftKey) ? alt : st.drag; }
   });
   canvas.addEventListener('pointermove', e => {
     const p = ptrs.get(e.pointerId);
@@ -837,13 +820,13 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     else if (gesture === 'pan') doPan(dx, dy);
     else if (gesture === 'look') { walk.yaw += dx * 0.004; walk.pitch = clamp(walk.pitch + dy * 0.004, -1.2, 1.2); }
   });
-  function endPtr(e) { ptrs.delete(e.pointerId); if (ptrs.size === 0) { gesture = null; canvas.style.cursor = 'default'; } else if (ptrs.size === 1) gesture = st.mode === 'walk' ? 'look' : 'orbit'; }
+  function endPtr(e) { ptrs.delete(e.pointerId); if (ptrs.size === 0) { gesture = null; canvas.style.cursor = 'default'; } else if (ptrs.size === 1) gesture = st.mode === 'walk' ? 'look' : st.drag; }
   canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
   canvas.addEventListener('wheel', e => { e.preventDefault(); if (st.mode !== 'walk') goal.r = clamp(goal.r * Math.exp(e.deltaY * 0.001), 3, 32); }, { passive: false });
   function doPan(dx, dy) {
     const k = goal.r * 0.0017, th = goal.th;
-    goal.tx = clamp(goal.tx - Math.cos(th) * dx * k - Math.sin(th) * dy * k, -4, 12);
-    goal.tz = clamp(goal.tz + Math.sin(th) * dx * k - Math.cos(th) * dy * k, -3, 13);
+    goal.tx = clamp(goal.tx - Math.cos(th) * dx * k - Math.sin(th) * dy * k, -8, 16);
+    goal.tz = clamp(goal.tz + Math.sin(th) * dx * k - Math.cos(th) * dy * k, -7, 17);
   }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
   window.addEventListener('keydown', e => {
