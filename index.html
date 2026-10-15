@@ -85,6 +85,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
       <button class="chip" id="t-roof" aria-pressed="false">Roof: off</button>
       <button class="chip" id="t-walls" aria-pressed="false">Walls: full</button>
       <button class="chip" id="t-labels" aria-pressed="true">Labels</button>
+      <button class="chip" id="t-people" aria-pressed="true">People: on</button>
       <button class="chip" id="t-move" aria-pressed="false">Move furniture: off</button>
       <button class="chip" id="t-reset">Reset layout</button>
     </div>
@@ -193,12 +194,12 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     { x1: 100, y1: 270, x2: 737, y2: 270, gaps: [[150, 280, 'win'], [375, 500, 'win'], [575, 690, 'win']] },
     { x1: 100, y1: 270, x2: 100, y2: 990 }, { x1: 737, y1: 270, x2: 737, y2: 750 }, { x1: 585, y1: 750, x2: 737, y2: 750 },
     { x1: 585, y1: 750, x2: 585, y2: 990, gaps: [[775, 845, 'door']] }, { x1: 100, y1: 990, x2: 585, y2: 990 },
-    { x1: 330, y1: 270, x2: 330, y2: 990, gaps: [[538, 600, 'door'], [640, 705, 'door']] },
+    { x1: 330, y1: 270, x2: 330, y2: 990, gaps: [[538, 600, 'door']] },
     { x1: 100, y1: 750, x2: 330, y2: 750, gaps: [[265, 325, 'door']] },
     { x1: 330, y1: 515, x2: 532, y2: 515, gaps: [[405, 455, 'door']] },
-    { x1: 532, y1: 270, x2: 532, y2: 515, gaps: [[375, 450, 'door']] },
-    { x1: 330, y1: 600, x2: 417, y2: 600 }, { x1: 417, y1: 600, x2: 417, y2: 735 },
-    { x1: 417, y1: 620, x2: 500, y2: 620, gaps: [[440, 490, 'door']] }, { x1: 500, y1: 620, x2: 500, y2: 850 },
+    { x1: 532, y1: 270, x2: 532, y2: 515 },
+    { x1: 330, y1: 600, x2: 417, y2: 600, gaps: [[345, 405, 'door']] }, { x1: 417, y1: 600, x2: 417, y2: 735 },
+    { x1: 417, y1: 620, x2: 500, y2: 620 }, { x1: 500, y1: 620, x2: 500, y2: 850, gaps: [[645, 715, 'door']] },
     { x1: 330, y1: 735, x2: 500, y2: 735 }, { x1: 330, y1: 780, x2: 500, y2: 780, gaps: [[345, 440, 'door']] },
     { x1: 500, y1: 850, x2: 585, y2: 850, gaps: [[512, 565, 'door']] }
   ];
@@ -457,6 +458,63 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     return g;
   }
 
+  function person(o) {
+    const g = new THREE.Group(), r = { roughness: .85 };
+    const top = mat(o.top, r), bot = mat(o.bottom, r), skin = mat(o.skin || 0xe3b896, { roughness: .6 }), hair = mat(o.hair || 0x3a2a20, { roughness: .8 });
+    const sh = o.seat || .55, hip = o.seated ? sh + .08 : .9;
+    [-1, 1].forEach(s => {
+      if (o.seated) { bx(g, .14, .14, .44, bot, s * .1, sh + .07, .2, 0, .06); cy(g, .06, .045, sh - .02, bot, s * .1, (sh - .02) / 2, .42); }
+      else cy(g, .065, .05, .86, bot, s * .09, .45, 0);
+      bx(g, .1, .06, .22, BLACKP, s * .09 + (o.seated ? s * .01 : 0), .03, o.seated ? .5 : .05, 0, .03);
+      const arm = new THREE.Group(); arm.position.set(s * .25, hip + .55, 0); arm.rotation.x = -(o.arm || 0.05); g.add(arm);
+      cy(arm, .045, .04, .52, top, 0, -.26, 0); const hd = new THREE.Mesh(new THREE.SphereGeometry(.04, 12, 10), skin); hd.position.y = -.55; arm.add(hd);
+    });
+    bx(g, .38, .18, .24, bot, 0, hip, 0, 0, .08); bx(g, .4, .6, .24, top, 0, hip + .3, 0, 0, .1);
+    cy(g, .04, .045, .08, skin, 0, hip + .62, 0);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(.105, 24, 16), skin); head.scale.set(1, 1.1, 1); head.position.set(0, hip + .76, 0); g.add(head);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(.112, 24, 16, 0, Math.PI * 2, 0, Math.PI * .58), hair); cap.position.set(0, hip + .78, -.018); cap.rotation.x = -.25; g.add(cap);
+    if (o.long) bx(g, .2, .32, .08, hair, 0, hip + .62, -.1, 0, .04);
+    if (o.mask) bx(g, .13, .07, .03, M.white, 0, hip + .73, .097, 0, .012);
+    return g;
+  }
+  function patientLying() {
+    const g = new THREE.Group(), shirt = mat(0xe0a96d, { roughness: .85 }), jeans = mat(0x35465a, { roughness: .85 }), skin = mat(0xd9a77f, { roughness: .6 }), hair = mat(0x2a211c, { roughness: .8 });
+    bx(g, .42, .2, .62, shirt, 0, .8, -.72, .3, .08);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(.105, 24, 16), skin); head.position.set(0, 1.07, -1.27); g.add(head);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(.112, 24, 16, 0, Math.PI * 2, 0, Math.PI * .6), hair); cap.position.set(0, 1.09, -1.29); g.add(cap);
+    [-1, 1].forEach(s => {
+      bx(g, .11, .1, .5, shirt, s * .27, .76, -.62, .3, .04);
+      bx(g, .14, .14, .46, jeans, s * .1, .67, .08, 0, .06);
+    });
+    const leg = new THREE.Group(); leg.position.set(0, .47, .3); leg.rotation.x = .55; g.add(leg);
+    [-1, 1].forEach(s => { bx(leg, .13, .13, .5, jeans, s * .1, .13, .3, 0, .05); bx(leg, .11, .07, .22, BLACKP, s * .1, .13, .62, 0, .03); });
+    return g;
+  }
+  const peopleList = [];
+  function addPerson(parent, p, x, y, z, ry) { p.position.set(x, y, z); p.rotation.y = ry || 0; shadow(p); p.userData.person = true; parent.add(p); peopleList.push(p); }
+  const tvTex = (() => {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 288; const g = c.getContext('2d');
+    const gr = g.createLinearGradient(0, 0, 512, 288); gr.addColorStop(0, '#0e4c52'); gr.addColorStop(1, '#58b6bc'); g.fillStyle = gr; g.fillRect(0, 0, 512, 288);
+    g.fillStyle = 'rgba(255,255,255,.92)'; g.textAlign = 'center'; g.font = '600 40px "Barlow Condensed", sans-serif'; g.fillText('DRA. LUDMILA ANTONELLI', 256, 140);
+    g.font = '400 24px "IBM Plex Sans", sans-serif'; g.fillText('Consultorios odontológicos', 256, 180);
+    return new THREE.CanvasTexture(c);
+  })();
+  const decor = new THREE.Group();
+  (function () {
+    const wx = X(532) + T / 2;
+    const tv = new THREE.Group(); tv.position.set(wx + .03, 1.5, Z(430)); tv.rotation.y = Math.PI / 2;
+    bx(tv, 1.1, .64, .05, BLACKP, 0, 0, 0, 0, .015);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(1.04, .58), new THREE.MeshBasicMaterial({ map: tvTex })); scr.position.z = .027; tv.add(scr);
+    decor.add(tv);
+    const fr = new THREE.Group(); fr.position.set(wx + .02, 1.55, Z(340)); fr.rotation.y = Math.PI / 2;
+    bx(fr, .8, .6, .035, WOODD, 0, 0, 0, 0, .012); bx(fr, .68, .48, .02, M.white, 0, 0, .012, 0, .004);
+    const hill = new THREE.Mesh(new THREE.CircleGeometry(.2, 32, 0, Math.PI), mat(0x5b9a6a, { roughness: .9 })); hill.position.set(-.1, -.14, .024); fr.add(hill);
+    const sun = new THREE.Mesh(new THREE.CircleGeometry(.07, 24), mat(0xf0b44c, { roughness: .9 })); sun.position.set(.14, .06, .024); fr.add(sun);
+    decor.add(fr);
+    shadow(decor);
+  })();
+  wallsFull.add(decor);
+
   // ---- placement
   const items = [], staticGroup = new THREE.Group(); scene.add(staticGroup);
   const blobTex = canvasTex(64, (c, s) => { const gr = c.createRadialGradient(s / 2, s / 2, 2, s / 2, s / 2, s / 2); gr.addColorStop(0, 'rgba(0,0,0,.28)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = gr; c.fillRect(0, 0, s, s); });
@@ -471,25 +529,30 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   }
   function fixed(g, px, py, rot) { place(g, px, py, rot); staticGroup.add(g); }
 
-  item('Dental chair 1', dentalChair(), 200, 415, Math.PI);
+  const chair1 = dentalChair(); item('Dental chair 1', chair1, 200, 415, Math.PI);
+  addPerson(chair1, patientLying(), 0, 0, 0, 0);
+  addPerson(chair1, person({ top: 0x2f8189, bottom: 0x2f8189, hair: 0x5a3a24, long: true, mask: true, arm: .9 }), 0, 0, -1.55, 0);
   item('Dental chair 2', dentalChair(), 385, 390, Math.PI);
   item('Operator stool', stool(LEATHER), 255, 455);
-  item('Operator stool', stool(LEATHER), 440, 440);
+  const stool2 = stool(LEATHER); item('Operator stool', stool2, 440, 440);
+  addPerson(stool2, person({ top: 0x7fb5c9, bottom: 0x7fb5c9, hair: 0x1e1814, long: false, mask: true, seated: true, seat: .55, arm: .8 }), 0, 0, -.05, -2.3);
   item('Cabinet with sink', counter(.5, 2.4, { sinks: [[0, .5]], front: '-x' }), 305, 375);
   item('Cabinet with sink', counter(.5, 2.4, { sinks: [[0, .5]], front: '-x' }), 509, 412);
   item('Desk', desk(2.4, .65), 227, 675, 0);
   item('Desk chair', officeChair(FAB2), 190, 636, 0); item('Desk chair', officeChair(FAB2), 190, 716, Math.PI);
   item('Reception counter', receptionDesk(), 675, 640);
-  item('Reception chair', officeChair(FAB), 678, 640, -3 * Math.PI / 4);
+  const recChair = officeChair(FAB); item('Reception chair', recChair, 678, 640, -3 * Math.PI / 4);
+  addPerson(recChair, person({ top: 0x39434a, bottom: 0x2b3033, hair: 0xb07a45, long: true, seated: true, seat: .47, arm: .7 }), 0, 0, -.06, 0);
   item('Waiting armchair', armchair(), 575, 305, 0); item('Waiting armchair', armchair(), 635, 305, 0);
   item('Waiting armchair', armchair(), 697, 430, -Math.PI / 2); item('Waiting armchair', armchair(), 697, 492, -Math.PI / 2);
   item('Side table', roundTable(.35), 703, 322);
-  item('Sterilizer unit', autoclave(), 352, 868);
+  item('Sterilizer unit', autoclave(), 352, 868, Math.PI / 2);
   item('Sink counter', counter(.55, 1.13, { sinks: [[0, 0]], front: '+x' }), 356, 945);
   item('Printing counter', counter(2.56, .5, { sinks: [[.94, 0]], printer: -.6, front: '-z' }), 480, 970);
   item('Office chair', officeChair(FAB), 445, 925, Math.PI / 2); item('Office chair', officeChair(FAB), 510, 925, -Math.PI / 2);
   item('Plant', plant(1.1, 11), 553, 485); item('Plant', plant(1.3, 23), 712, 722);
   item('Plant', plant(1.0, 5), 135, 960); item('Plant', plant(1.2, 41), 130, 800);
+  item('Plant', plant(.9, 3), 420, 240); item('Plant', plant(1.2, 17), 500, 205); item('Plant', plant(.8, 29), 575, 240); item('Plant', plant(1.1, 37), 640, 200);
   fixed(toilet(), 360, 722, 0); fixed(toilet(), 462, 722, 0);
   fixed(basin(), 398, 660, -Math.PI / 2); fixed(basin(), 458, 645, 0);
   fixed(shelving(2.0, .45), 415, 757, 0);
@@ -527,7 +590,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   buildLabels(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(buildLabels);
 
   // ---- state & camera
-  const st = { mode: 'orbit', roof: false, walls: 'cut', labels: true, move: false };
+  const st = { mode: 'orbit', roof: false, walls: 'cut', labels: true, move: false, people: true };
   const cam = { th: 0.5, ph: 0.95, r: 15, tx: 4, ty: 0, tz: 4.6 }, goal = Object.assign({}, cam);
   const walk = { x: X(560), z: Z(815), yaw: 0, pitch: 0 };
   const keys = {};
@@ -541,6 +604,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     document.getElementById('t-walls').textContent = 'Walls: ' + (st.walls === 'full' ? 'full' : st.walls === 'cut' ? 'cut-away' : 'hidden');
     document.getElementById('t-walls').setAttribute('aria-pressed', st.walls !== 'full');
     document.getElementById('t-labels').setAttribute('aria-pressed', st.labels);
+    peopleList.forEach(p => p.visible = st.people);
+    document.getElementById('t-people').textContent = 'People: ' + (st.people ? 'on' : 'off');
+    document.getElementById('t-people').setAttribute('aria-pressed', st.people);
     document.getElementById('t-move').textContent = 'Move furniture: ' + (st.move ? 'on' : 'off');
     document.getElementById('t-move').setAttribute('aria-pressed', st.move);
     document.getElementById('t-move').disabled = w; document.getElementById('t-reset').disabled = w;
@@ -574,6 +640,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   document.getElementById('t-roof').onclick = () => { st.roof = !st.roof; applyVis(); };
   document.getElementById('t-walls').onclick = () => { st.walls = st.walls === 'full' ? 'cut' : st.walls === 'cut' ? 'off' : 'full'; applyVis(); };
   document.getElementById('t-labels').onclick = () => { st.labels = !st.labels; applyVis(); };
+  document.getElementById('t-people').onclick = () => { st.people = !st.people; applyVis(); };
   document.getElementById('t-move').onclick = () => { st.move = !st.move; if (!st.move) deselect(); applyVis(); };
   document.getElementById('t-reset').onclick = () => { items.forEach(g => { g.position.set(g.userData.home.x, 0, g.userData.home.z); g.rotation.y = g.userData.home.r; }); deselect(); };
 
