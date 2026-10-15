@@ -228,7 +228,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   }
 
   // ---- walls with skirting, door frames + open door leaves, window frames
-  const colliders = [];
+  const colliders = [], doors = [];
   const skirtMat = mat(0xffffff, { roughness: .5 }), doorMat = mat(0xf8f7f3, { roughness: .45 }), leafMat = mat(0xb9803f, { roughness: .45 });
   function buildWalls(h, full) {
     const g = new THREE.Group(); let doorN = 0;
@@ -267,7 +267,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
             leaf.castShadow = true; leaf.position.set(horiz ? wd / 2 : 0, 1.015, horiz ? 0 : wd / 2);
             const hnd = new THREE.Mesh(new THREE.SphereGeometry(.025, 10, 8), M.steel); hnd.position.set(horiz ? wd - .07 : .04, 1.0 - 1.015, horiz ? .04 : wd - .07); leaf.add(hnd);
             pivot.add(leaf); pivot.position.set(horiz ? lo + .05 : fx, 0, horiz ? fx : lo + .05);
-            pivot.rotation.y = (doorN++ % 2 ? 1 : -1) * 1.3; g.add(pivot);
+            const ang = (doorN++ % 2 ? 1 : -1) * 1.3; pivot.rotation.y = ang; g.add(pivot);
+            const col = horiz ? { x1: lo, x2: hi, z1: fx - T / 2, z2: fx + T / 2, active: false } : { x1: fx - T / 2, x2: fx + T / 2, z1: lo, z2: hi, active: false };
+            colliders.push(col); pivot.userData.door = { open: true, ang, cur: ang, target: ang, col }; doors.push(pivot);
           } else {
             put(ga, gb, 0, sill, M.wall, true); put(ga, gb, 2.1, h, M.wall, false); put(ga, gb, sill, 2.1, M.glass, true);
             frame(lo, hi, sill, 2.1);
@@ -406,9 +408,12 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
       if (alongZ) { bx(g, .006, .72, len / n - .015, WOODL, sg * (w / 2 + .002), .43, c, 0, .003); bx(g, .014, .1, .018, CHROME, sg * (w / 2 + .012), .68, c + len / n * .3, 0, .005); }
       else { bx(g, len / n - .015, .72, .006, WOODL, c, .43, sg * (d / 2 + .002), 0, .003); bx(g, .018, .1, .014, CHROME, c + len / n * .3, .68, sg * (d / 2 + .012), 0, .005); }
     }
+    const bk = o.back || '+z', bkx = bk[1] === 'x', bs = bk[0] === '-' ? -1 : 1;
     (o.sinks || []).forEach(s => {
-      bx(g, .46, .012, Math.min(.38, d - .08), CHROME, s[0], .885, s[1], 0, .006); bx(g, .38, .008, Math.min(.3, d - .14), mat(0x8a969a, { roughness: .4 }), s[0], .893, s[1], 0, .003);
-      tube(g, [[s[0], .89, s[1] - .16], [s[0], .99, s[1] - .16], [s[0], 1.03, s[1] - .1], [s[0], .98, s[1] - .02]], .012, CHROME);
+      const pw = bkx ? .36 : .46, pd = bkx ? .46 : .36;
+      bx(g, pw, .012, pd, CHROME, s[0], .885, s[1], 0, .006); bx(g, pw - .08, .008, pd - .08, mat(0x8a969a, { roughness: .4 }), s[0], .893, s[1], 0, .003);
+      const fx = s[0] + (bkx ? bs * (pw / 2 + .02) : 0), fz = s[1] + (bkx ? 0 : bs * (pd / 2 + .02)), dx = bkx ? -bs : 0, dz = bkx ? 0 : -bs;
+      tube(g, [[fx, .89, fz], [fx, .98, fz], [fx + dx * .05, 1.03, fz + dz * .05], [fx + dx * .12, .97, fz + dz * .12]], .012, CHROME);
     });
     if (o.printer != null) { bx(g, .44, .22, .34, BLACKP, o.printer, .99, 0, 0, .03); bx(g, .3, .01, .2, PLASTIC, o.printer, 1.11, .02, 0, .004); }
     return g;
@@ -443,17 +448,119 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     [-1, 1].forEach(s => { const c = new THREE.Mesh(new THREE.SphereGeometry(.2, 20, 12), CHROME); c.position.set(.64 + s * .25, .28, 0); c.scale.set(.3, 1, 1); g.add(c); });
     return g;
   }
-  function plant(h, seed) {
-    const g = new THREE.Group(); let s = seed || 7; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
-    lathe(g, [[0, 0], [.14, 0], [.2, .05], [.225, .3], [.2, .33], [.185, .32], [.185, .29], [0, .29]], mat(0xf0e9de, { roughness: .8 }));
-    cy(g, .18, .18, .02, mat(0x4a3a2c, { roughness: 1 }), 0, .3, 0);
-    const greens = [mat(0x4f8a4a, { roughness: .6 }), mat(0x3f7a45, { roughness: .6 }), mat(0x6a9a4b, { roughness: .6 }), mat(0x2f6b3f, { roughness: .6 })];
-    const unit = new THREE.SphereGeometry(1, 10, 8), up = new THREE.Vector3(0, 1, 0);
-    for (let i = 0; i < 26; i++) {
-      const a = rnd() * Math.PI * 2, t = .15 + rnd() * .8, len = (.3 + rnd() * .5) * h, base = .3 + rnd() * .12 * h;
-      const dir = new THREE.Vector3(Math.sin(t) * Math.cos(a), Math.cos(t), Math.sin(t) * Math.sin(a));
-      const leaf = new THREE.Mesh(unit, greens[i % 4]); leaf.scale.set(.06 + rnd() * .04, len / 2, .012);
-      leaf.position.copy(dir.clone().multiplyScalar(len / 2)).add(new THREE.Vector3(0, base, 0)); leaf.quaternion.setFromUnitVectors(up, dir); g.add(leaf);
+
+
+  // ---- plants: textured leaf ribbons (alpha-cut silhouettes) on curved stems, ceramic pots
+  const V3 = THREE.Vector3;
+  function leafTex(w, h, draw) { return canvasTex(256, (g, s) => { g.clearRect(0, 0, s, s); draw(g, s); }); }
+  const texMonstera = leafTex(256, 256, (g, s) => {
+    g.beginPath(); g.moveTo(128, 250); g.bezierCurveTo(96, 252, 16, 232, 10, 150); g.bezierCurveTo(6, 70, 70, 10, 128, 5); g.bezierCurveTo(186, 10, 250, 70, 246, 150); g.bezierCurveTo(240, 232, 160, 252, 128, 250); g.closePath();
+    const gr = g.createLinearGradient(0, 0, 0, s); gr.addColorStop(0, '#3a8a46'); gr.addColorStop(1, '#1b4d2a'); g.fillStyle = gr; g.fill();
+    g.strokeStyle = 'rgba(190,232,170,.38)'; g.lineWidth = 1.6;
+    for (let k = 0; k < 11; k++) { const y = 236 - k * 20; [-1, 1].forEach(sg => { g.beginPath(); g.moveTo(128, y); g.quadraticCurveTo(128 + sg * 60, y - 14, 128 + sg * (112 - k * 5), y - 52); g.stroke(); }); }
+    g.strokeStyle = 'rgba(205,240,185,.6)'; g.lineWidth = 3.2; g.beginPath(); g.moveTo(128, 250); g.lineTo(128, 8); g.stroke();
+    g.globalCompositeOperation = 'destination-out'; g.lineCap = 'round'; g.lineWidth = 9;
+    for (let k = 0; k < 5; k++) { const yy = 50 + k * 38; [-1, 1].forEach(sg => { g.beginPath(); g.moveTo(128 + sg * 170, yy - 22); g.lineTo(128 + sg * (46 + k * 3), yy + 4); g.stroke(); }); }
+    [-1, 1].forEach(sg => [[84, 150], [76, 105], [70, 195]].forEach(([dx, y]) => { g.beginPath(); g.ellipse(128 + sg * (dx - 40), y, 5, 11, sg * .5, 0, 7); g.fill(); }));
+    g.globalCompositeOperation = 'source-over';
+  });
+  const texFicus = leafTex(256, 256, (g, s) => {
+    g.beginPath(); g.moveTo(128, 252); g.bezierCurveTo(30, 232, 22, 100, 128, 4); g.bezierCurveTo(234, 100, 226, 232, 128, 252); g.closePath();
+    const gr = g.createLinearGradient(0, 0, s, 0); gr.addColorStop(0, '#1b4527'); gr.addColorStop(.5, '#3a7a42'); gr.addColorStop(1, '#1b4527'); g.fillStyle = gr; g.fill();
+    g.strokeStyle = 'rgba(170,215,150,.35)'; g.lineWidth = 1.4;
+    for (let k = 0; k < 14; k++) { const y = 240 - k * 16; [-1, 1].forEach(sg => { g.beginPath(); g.moveTo(128, y); g.lineTo(128 + sg * (95 - k * 5), y - 30); g.stroke(); }); }
+    g.strokeStyle = 'rgba(200,170,120,.8)'; g.lineWidth = 3.5; g.beginPath(); g.moveTo(128, 252); g.lineTo(128, 8); g.stroke();
+  });
+  const texSnake = leafTex(256, 256, (g, s) => {
+    g.beginPath(); g.moveTo(128, 254); g.bezierCurveTo(8, 214, 6, 80, 128, 3); g.bezierCurveTo(250, 80, 248, 214, 128, 254); g.closePath();
+    g.save(); g.clip(); g.fillStyle = '#2a5a2c'; g.fillRect(0, 0, s, s);
+    for (let k = 0; k < 20; k++) { g.strokeStyle = `rgba(150,190,110,${.22 + (k % 3) * .08})`; g.lineWidth = 7; g.beginPath(); const y = 10 + k * 13; g.moveTo(0, y + 8); g.bezierCurveTo(80, y - 6, 170, y + 20, s, y + 4); g.stroke(); }
+    g.restore();
+    g.strokeStyle = '#d8c64c'; g.lineWidth = 9; g.beginPath(); g.moveTo(128, 254); g.bezierCurveTo(8, 214, 6, 80, 128, 3); g.bezierCurveTo(250, 80, 248, 214, 128, 254); g.stroke();
+  });
+  const texFrond = leafTex(256, 256, (g, s) => {
+    const greens = ['#2f7a3a', '#3a8a44', '#276a33', '#4a9650'];
+    g.strokeStyle = '#2d5e32'; g.lineWidth = 3; g.beginPath(); g.moveTo(128, 256); g.lineTo(128, 0); g.stroke();
+    for (let k = 4; k < 30; k++) {
+      const y = 246 - k * 7.9, len = 120 * Math.pow(Math.sin(Math.PI * (k - 2) / 30), .55);
+      [-1, 1].forEach(sg => {
+        const tx = 128 + sg * len, ty = y - len * .5; g.fillStyle = greens[(k + (sg > 0 ? 1 : 0)) % 4];
+        g.beginPath(); g.moveTo(128, y + 3); g.quadraticCurveTo(128 + sg * len * .6, y - len * .12, tx, ty); g.quadraticCurveTo(128 + sg * len * .55, y - len * .02, 128, y - 3); g.closePath(); g.fill();
+      });
+    }
+  });
+  const plantLeafMat = tx => new THREE.MeshStandardMaterial({ map: tx, alphaTest: .5, side: THREE.DoubleSide, roughness: .45, metalness: 0, emissive: 0x0c2a10 });
+  const LM = { monstera: plantLeafMat(texMonstera), ficus: plantLeafMat(texFicus), snake: plantLeafMat(texSnake), frond: plantLeafMat(texFrond) };
+  function ribbon(len, wid, o) {
+    o = o || {}; const sv = o.sv || 10, su = o.su || 4, droop = o.droop == null ? .3 : o.droop, fold = o.fold == null ? .15 : o.fold, ph = o.seed || 0;
+    const pos = [], uv = [], idx = [];
+    for (let i = 0; i <= sv; i++) for (let j = 0; j <= su; j++) {
+      const v = i / sv, u = j / su * 2 - 1, x = u * wid / 2;
+      pos.push(x, v * len * (1 - .12 * droop * v), -droop * len * v * v * .6 + fold * Math.abs(x) + Math.sin(v * 9 + ph) * .004);
+      uv.push(j / su, v);
+    }
+    for (let i = 0; i < sv; i++) for (let j = 0; j < su; j++) { const a = i * (su + 1) + j, b = a + 1, c = a + su + 1, d = c + 1; idx.push(a, b, c, b, d, c); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g;
+  }
+  function putLeaf(parent, geo, mt, base, dir, face, roll) {
+    const y = dir.clone().normalize(); let z = face.clone().sub(y.clone().multiplyScalar(face.dot(y))); if (z.lengthSq() < 1e-5) z.set(0, 0, 1); z.normalize();
+    const x = new V3().crossVectors(y, z).normalize(); z = new V3().crossVectors(x, y);
+    const m = new THREE.Mesh(geo, mt); m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z)); if (roll) m.rotateY(roll); m.position.copy(base); parent.add(m); return m;
+  }
+  function potted(color, r) {
+    const g = new THREE.Group(), pm = mat(color, { roughness: .6 }), k = r / .22;
+    lathe(g, [[0, 0], [.15 * k, 0], [.2 * k, .03], [.23 * k, .28], [.245 * k, .3], [.245 * k, .325], [.22 * k, .325], [.21 * k, .3], [0, .3]], pm);
+    lathe(g, [[0, 0], [.26 * k, 0], [.285 * k, .02], [.265 * k, .028], [0, .022]], mat(0xdad6cd, { roughness: .7 }));
+    cy(g, .205 * k, .205 * k, .02, mat(0x3b2f26, { roughness: 1 }), 0, .295, 0);
+    for (let i = 0; i < 9; i++) { const a = i * 2.4, st = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), mat(0xcfc8bb, { roughness: .9 })); st.scale.set(.02, .012, .016); st.position.set(Math.cos(a) * .12 * k * (.4 + (i % 3) * .3), .31, Math.sin(a) * .12 * k * (.4 + (i % 3) * .3)); g.add(st); }
+    return g;
+  }
+  function rng(seed) { let s = seed || 7; return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; }
+  const UP = new V3(0, 1, 0);
+  function plantMonstera(h, seed) {
+    const g = potted(0xf0e9de, .24), rnd = rng(seed), n = 9;
+    for (let i = 0; i < n; i++) {
+      const a = i * 2.4 + rnd() * .4, rr = .1 + .22 * rnd() * h, top = .32 + h * (.28 + .5 * (i / n) * (.6 + .4 * rnd())), c = new V3(Math.cos(a), 0, Math.sin(a));
+      const p0 = new V3(c.x * .03, .31, c.z * .03), p1 = new V3(c.x * .05, .31 + (top - .31) * .6, c.z * .05), p2 = new V3(c.x * rr, top, c.z * rr);
+      g.add(sweep([p0.toArray(), p1.toArray(), p2.toArray()], [[0, .011, .011], [1, .006, .006]], mat(0x3d7a3e, { roughness: .6 }), null, { n: 10, s: 6 }));
+      const len = (.3 + .12 * rnd()) * h * 1.1, geo = ribbon(len, len * .95, { sv: 10, su: 8, droop: .55, fold: .12, seed: rnd() * 6 });
+      putLeaf(g, geo, LM.monstera, p2, c.clone().multiplyScalar(.85).add(new V3(0, .2 + .2 * rnd(), 0)), UP, (rnd() - .5) * .5);
+    }
+    return g;
+  }
+  function plantFicus(h, seed) {
+    const g = potted(0x4b5a5f, .24), rnd = rng(seed), trunkTop = .3 + h * .8;
+    g.add(sweep([[0, .3, 0], [.015, .3 + h * .4, .01], [.0, trunkTop, -.01]], [[0, .02, .02], [1, .008, .008]], mat(0x6b5a45, { roughness: .8 }), null, { n: 14, s: 8 }));
+    for (let i = 0; i < 46; i++) {
+      const t = .22 + .78 * (i / 46), y = .3 + (trunkTop - .3) * t, a = i * 2.4 + rnd() * .3, c = new V3(Math.cos(a), 0, Math.sin(a));
+      const len = (.2 - .06 * t) * (.8 + .4 * rnd()) * Math.max(.8, h * .9), geo = ribbon(len, len * .55, { sv: 8, su: 4, droop: .3, fold: .1, seed: rnd() * 6 });
+      putLeaf(g, geo, LM.ficus, new V3(c.x * .012, y, c.z * .012), c.clone().multiplyScalar(.8).add(new V3(0, .35 + .25 * t, 0)), UP, (rnd() - .5) * .4);
+    }
+    return g;
+  }
+  function plantSnake(h, seed) {
+    const g = potted(0x2f3a3e, .22), rnd = rng(seed);
+    for (let i = 0; i < 14; i++) {
+      const a = i * 2.4 + rnd() * .3, rr = .02 + .05 * rnd(), c = new V3(Math.cos(a), 0, Math.sin(a)), len = (.4 + .5 * rnd()) * h;
+      const geo = ribbon(len, .06 + .035 * rnd(), { sv: 14, su: 3, droop: .06, fold: .35, seed: rnd() * 6 });
+      putLeaf(g, geo, LM.snake, new V3(c.x * rr, .3, c.z * rr), new V3(c.x * (.08 + .22 * rnd()), 1, c.z * (.08 + .22 * rnd())), c, (rnd() - .5) * .6);
+    }
+    return g;
+  }
+  function plantAreca(h, seed) {
+    const g = potted(0xc9794a, .26), rnd = rng(seed), n = 8;
+    for (let i = 0; i < n; i++) {
+      const a = i * 2.4 + rnd() * .3, c = new V3(Math.cos(a), 0, Math.sin(a)), reach = (.5 + .35 * rnd()) * h, top = .3 + h * (.55 + .35 * rnd());
+      const pts = [new V3(c.x * .02, .3, c.z * .02), new V3(c.x * reach * .12, .3 + (top - .3) * .55, c.z * reach * .12), new V3(c.x * reach * .45, top, c.z * reach * .45), new V3(c.x * reach * .85, top - h * .22, c.z * reach * .85)];
+      const curve = new THREE.CatmullRomCurve3(pts), sv = 22, wid = .42 * h, pos = [], uv = [], idx = [];
+      for (let k = 0; k <= sv; k++) {
+        const v = k / sv, p = curve.getPointAt(v), T = curve.getTangentAt(v), s = new V3().crossVectors(T, UP).normalize(), w = v < .3 ? .004 : wid / 2;
+        pos.push(p.x - s.x * w, p.y - s.y * w, p.z - s.z * w, p.x + s.x * w, p.y + s.y * w, p.z + s.z * w); uv.push(0, v, 1, v);
+      }
+      for (let k = 0; k < sv; k++) { const q = k * 2; idx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2); }
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+      const m = new THREE.Mesh(geo, LM.frond); g.add(m);
+      g.add(sweep(pts.map(p => p.toArray()), [[0, .012, .012], [.45, .007, .007], [1, .003, .003]], mat(0x3d7a3e, { roughness: .6 }), null, { n: 16, s: 6 }));
     }
     return g;
   }
@@ -679,8 +786,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   item('Operator stool', stool(LEATHER), 255, 455);
   const stool2 = stool(LEATHER); item('Operator stool', stool2, 440, 440);
   addPerson(stool2, human({ pose: 'stool', female: true, top: 0x7fb5c9, bottom: 0x7fb5c9, skin: 0xcf9a74, hair: 0x1e1814, hairStyle: 'bun', sleeve: 'short', scrubs: true, mask: true, glasses: true, gloves: true }), 0, 0, -.05, -2.3);
-  item('Cabinet with sink', counter(.5, 2.4, { sinks: [[0, .5]], front: '-x' }), 305, 375);
-  item('Cabinet with sink', counter(.5, 2.4, { sinks: [[0, .5]], front: '-x' }), 509, 412);
+  item('Cabinet with sink', counter(.5, 2.4, { sinks: [[0, .5]], front: '-x', back: '+x' }), 305, 375);
+  item('Cabinet with sink', counter(.5, 2.4, { sinks: [[0, .5]], front: '-x', back: '+x' }), 509, 412);
   item('Desk', desk(2.4, .65), 227, 675, 0);
   item('Desk chair', officeChair(FAB2), 190, 636, 0); item('Desk chair', officeChair(FAB2), 190, 716, Math.PI);
   item('Reception counter', receptionDesk(), 675, 640);
@@ -690,12 +797,12 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   item('Waiting armchair', armchair(), 697, 430, -Math.PI / 2); item('Waiting armchair', armchair(), 697, 492, -Math.PI / 2);
   item('Side table', roundTable(.35), 703, 322);
   item('Sterilizer unit', autoclave(), 352, 868, Math.PI / 2);
-  item('Sink counter', counter(.55, 1.13, { sinks: [[0, 0]], front: '+x' }), 356, 945);
-  item('Printing counter', counter(2.56, .5, { sinks: [[.94, 0]], printer: -.6, front: '-z' }), 480, 970);
+  item('Sink counter', counter(.55, 1.13, { sinks: [[0, 0]], front: '+x', back: '-x' }), 356, 945);
+  item('Printing counter', counter(2.56, .5, { sinks: [[.94, 0]], printer: -.6, front: '-z', back: '+z' }), 480, 970);
   item('Office chair', officeChair(FAB), 445, 925, Math.PI / 2); item('Office chair', officeChair(FAB), 510, 925, -Math.PI / 2);
-  item('Plant', plant(1.1, 11), 553, 485); item('Plant', plant(1.3, 23), 712, 722);
-  item('Plant', plant(1.0, 5), 135, 960); item('Plant', plant(1.2, 41), 130, 800);
-  item('Plant', plant(.9, 3), 420, 240); item('Plant', plant(1.2, 17), 500, 205); item('Plant', plant(.8, 29), 575, 240); item('Plant', plant(1.1, 37), 640, 200);
+  item('Plant', plantMonstera(1.1, 11), 553, 485); item('Plant', plantAreca(1.35, 23), 712, 722);
+  item('Plant', plantSnake(1.0, 5), 135, 960); item('Plant', plantFicus(1.2, 41), 130, 800);
+  item('Plant', plantSnake(.8, 3), 420, 240); item('Plant', plantMonstera(.95, 17), 500, 205); item('Plant', plantAreca(1.2, 29), 575, 240); item('Plant', plantFicus(1.0, 37), 640, 200);
   fixed(toilet(), 360, 722, 0); fixed(toilet(), 462, 722, 0);
   fixed(basin(), 398, 660, -Math.PI / 2); fixed(basin(), 458, 645, 0);
   fixed(shelving(2.0, .45), 415, 757, 0);
@@ -739,9 +846,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     document.getElementById('pad').hidden = !w;
   }
   const hintFor = m => {
-    if (m === 'walk') return 'Drag to look around (the view follows your hand) · W A S D or arrow keys to walk · Shift to run · pick a room below to jump there';
+    if (m === 'walk') return 'Drag to look around (the view follows your hand) · W A S D or arrow keys to walk · Shift to run · click a door to open or close it · pick a room below to jump there';
     const main = st.drag === 'pan' ? 'Drag to move the model · right-drag or Shift-drag to rotate' : 'Drag to rotate · right-drag or Shift-drag to move the model';
-    return main + ' · scroll or pinch to zoom · turn on Move furniture to drag pieces';
+    return main + ' · scroll or pinch to zoom · click a door to open or close it · turn on Move furniture to drag pieces';
   };
   function setHint() { document.getElementById('hint').textContent = hintFor(st.mode); }
   function fitR() { return 14 * Math.max(1, 1.2 / camera.aspect); }
@@ -793,10 +900,23 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     for (const h of hits) { let o = h.object; while (o && !o.userData.item) o = o.parent; if (o) return o; }
     return null;
   }
+  function doorAt(e) {
+    if (!wallsFull.visible) return null;
+    setRay(e); const h = ray.intersectObject(wallsFull, true)[0]; if (!h) return null;
+    let o = h.object; while (o && !o.userData.door) o = o.parent;
+    return o && (st.mode !== 'walk' || h.distance < 5) ? o : null;
+  }
+  function toggleDoor(d) {
+    const u = d.userData.door, c = u.col;
+    if (u.open && st.mode === 'walk' && walk.x > c.x1 - .6 && walk.x < c.x2 + .6 && walk.z > c.z1 - .6 && walk.z < c.z2 + .6) return;
+    u.open = !u.open; u.target = u.open ? u.ang : 0; c.active = !u.open;
+  }
+  let down = null;
   const ptrs = new Map(); let gesture = null, pinch = 0, dragOff = new THREE.Vector3(), lastMid = null;
   canvas.addEventListener('contextmenu', e => e.preventDefault());
   canvas.addEventListener('pointerdown', e => {
     canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    down = ptrs.size === 1 ? { x: e.clientX, y: e.clientY, id: e.pointerId } : null;
     if (ptrs.size === 2) { const p = [...ptrs.values()]; pinch = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y); lastMid = { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2 }; gesture = 'pinch'; return; }
     if (st.mode === 'walk') { gesture = 'look'; return; }
     const hit = e.button === 0 && st.move ? pickItem(e) : null;
@@ -806,7 +926,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   });
   canvas.addEventListener('pointermove', e => {
     const p = ptrs.get(e.pointerId);
-    if (!p) { if (st.move && st.mode !== 'walk' && e.pointerType === 'mouse') canvas.style.cursor = pickItem(e) ? 'grab' : 'default'; return; }
+    if (!p) { if (e.pointerType === 'mouse') canvas.style.cursor = st.move && st.mode !== 'walk' && pickItem(e) ? 'grab' : doorAt(e) ? 'pointer' : 'default'; return; }
     const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
     if (gesture === 'pinch' && ptrs.size === 2) {
       const q = [...ptrs.values()], d = Math.hypot(q[0].x - q[1].x, q[0].y - q[1].y), mid = { x: (q[0].x + q[1].x) / 2, y: (q[0].y + q[1].y) / 2 };
@@ -820,7 +940,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     else if (gesture === 'pan') doPan(dx, dy);
     else if (gesture === 'look') { walk.yaw += dx * 0.004; walk.pitch = clamp(walk.pitch + dy * 0.004, -1.2, 1.2); }
   });
-  function endPtr(e) { ptrs.delete(e.pointerId); if (ptrs.size === 0) { gesture = null; canvas.style.cursor = 'default'; } else if (ptrs.size === 1) gesture = st.mode === 'walk' ? 'look' : st.drag; }
+  function endPtr(e) {
+    if (down && down.id === e.pointerId && e.type === 'pointerup' && gesture !== 'item' && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6) { const d = doorAt(e); if (d) toggleDoor(d); }
+    down = null; ptrs.delete(e.pointerId); if (ptrs.size === 0) { gesture = null; canvas.style.cursor = 'default'; } else if (ptrs.size === 1) gesture = st.mode === 'walk' ? 'look' : st.drag; }
   canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
   canvas.addEventListener('wheel', e => { e.preventDefault(); if (st.mode !== 'walk') goal.r = clamp(goal.r * Math.exp(e.deltaY * 0.001), 3, 32); }, { passive: false });
   function doPan(dx, dy) {
@@ -842,7 +964,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     ['pointerup', 'pointercancel'].forEach(t => b.addEventListener(t, () => { keys[k] = false; }));
   });
 
-  function blocked(x, z, r) { for (const c of colliders) if (x > c.x1 - r && x < c.x2 + r && z > c.z1 - r && z < c.z2 + r) return true; return false; }
+  function blocked(x, z, r) { for (const c of colliders) if (c.active !== false && x > c.x1 - r && x < c.x2 + r && z > c.z1 - r && z < c.z2 + r) return true; return false; }
   function stepWalk(dt) {
     const run = keys.shift ? 2 : 1, sp = 1.5 * run * dt;
     let f = 0, s = 0, turn = 0;
@@ -884,6 +1006,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
       camera.up.set(0, 1, 0); camera.lookAt(cam.tx, cam.ty, cam.tz);
     }
     if (st.people) peopleList.forEach(p => p.userData.tick && p.userData.tick(now));
+    doors.forEach(d => { const u = d.userData.door; u.cur += (u.target - u.cur) * Math.min(1, dt * 7); d.rotation.y = u.cur; });
     renderer.render(scene, camera); requestAnimationFrame(frame);
   }
   goal.r = cam.r = fitR(); setMode('orbit'); applyVis(); requestAnimationFrame(frame);
